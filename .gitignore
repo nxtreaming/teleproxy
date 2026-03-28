@@ -1,0 +1,20 @@
+objs
+dep
+.idea
+proxy-multi.conf
+proxy-secret
+fuzz/fuzz_tls_server_hello
+fuzz/fuzz_tls_client_hello
+fuzz/fuzz_http_request
+fuzz/*.o
+fuzz/crash-*
+fuzz/oom-*
+fuzz/timeout-*
+# Docs: ignore all markdown except shipped docs
+*.md
+!README.md
+!README.*.md
+!CHANGELOG.md
+!TESTING.md
+tests/regenerate_*.py
+tests/seed_test_media.py
