@@ -12,14 +12,16 @@ regressions that throttle large downloads.
 Uses ONE client per transport mode to avoid AuthKeyDuplicatedError from
 Telegram seeing multiple connections with the same auth key.
 
-Requires the TG_STRING_SESSION environment variable (Telethon StringSession).
+Requires TG_BOT_TOKEN (preferred) or TG_STRING_SESSION environment variable.
 The CI job skips entirely on fork PRs (no secrets available).
 
 Usage:
+    TG_BOT_TOKEN=... TELEPROXY_SECRET=... python3 tests/test_direct_e2e.py
     TG_STRING_SESSION=... TELEPROXY_SECRET=... python3 tests/test_direct_e2e.py
 
 Environment variables:
-    TG_STRING_SESSION   Telethon StringSession string (required)
+    TG_BOT_TOKEN        Telegram bot token (preferred — no session revocation)
+    TG_STRING_SESSION   Telethon StringSession string (fallback)
     TELEPROXY_SECRET      32-char hex proxy secret (required)
     DIRECT_HOST         Proxy hostname (default: localhost)
     DIRECT_OBFS2_PORT   Obfuscated2 proxy port (default: 8443)
@@ -38,8 +40,9 @@ import time
 API_ID = 2834
 API_HASH = "68875f756c9b437a8b916ca3de215815"
 
-# Pre-saved test files in Saved Messages of the test account (user 8326553636).
+# Pre-saved test files in Saved Messages of a user test account.
 # Seeded by tests/seed_test_media.py — do not delete from Saved Messages.
+# Skipped automatically when using a bot token (bots have no Saved Messages).
 TEST_FILES = {
     "1mb": {"msg_id": 116459, "size": 1048576, "sha256": "2c331300901dc5a4a58fcce075212f9506da9cdb281203067760b0c2715eab59"},
     "20mb": {"msg_id": 116462, "size": 20971520, "sha256": "30ff0930d860a323c4e9e1f31a6758a7d208f0c53e57c4ea4361b8397e277816"},
@@ -179,14 +182,28 @@ async def _download_test_files(client, transport_label):
     return throughputs
 
 
-async def _connect_with_retry(client, label, max_retries=3, backoff=15):
-    """Connect and call get_me(), retrying on AuthKeyDuplicatedError.
+async def _connect_and_auth(client, label, bot_token=None):
+    """Connect and authenticate via bot token or pre-loaded session.
 
-    Telegram locks the auth key when a previous CI run didn't disconnect
-    cleanly.  The lock expires after a short cooldown.
+    Bot tokens authenticate fresh each run — no persistent auth key,
+    no AuthKeyDuplicatedError, no session revocation from datacenter IPs.
     """
+    if bot_token:
+        await asyncio.wait_for(client.connect(), timeout=30)
+        if not client.is_connected():
+            print(f"[{label}] FAIL: client did not connect")
+            return None
+        await asyncio.wait_for(
+            client.sign_in(bot_token=bot_token), timeout=15
+        )
+        me = await asyncio.wait_for(client.get_me(), timeout=15)
+        return me
+
+    # User session path — retry on AuthKeyDuplicatedError (stale lock
+    # from a previous CI run that didn't disconnect cleanly).
     from telethon.errors import AuthKeyDuplicatedError
 
+    max_retries, backoff = 3, 15
     for attempt in range(1, max_retries + 1):
         try:
             await asyncio.wait_for(client.connect(), timeout=30)
@@ -205,7 +222,6 @@ async def _connect_with_retry(client, label, max_retries=3, backoff=15):
                 except Exception:
                     pass
                 await asyncio.sleep(wait)
-                # Reconnect — need a fresh TCP socket
                 try:
                     await client.connect()
                 except Exception:
@@ -214,7 +230,7 @@ async def _connect_with_retry(client, label, max_retries=3, backoff=15):
                 raise
 
 
-async def test_obfs2_all(host, port, secret, session_str):
+async def test_obfs2_all(host, port, secret, bot_token="", session_str=""):
     """Run all obfs2 tests with a single client connection."""
     from telethon import TelegramClient
     from telethon.network.connection import (
@@ -233,11 +249,13 @@ async def test_obfs2_all(host, port, secret, session_str):
     )
 
     try:
-        me = await _connect_with_retry(client, "obfs2")
+        me = await _connect_and_auth(client, "obfs2",
+                                     bot_token=bot_token or None)
         if me is None:
+            print("[obfs2] FAIL: get_me() returned None")
             return False, {}
 
-        print(f"[obfs2] get_me OK: user_id={me.id}")
+        print(f"[obfs2] get_me OK: id={me.id}")
 
         throughputs = await _download_test_files(client, "obfs2")
         has_failure = any(v is None for v in throughputs.values())
@@ -252,7 +270,8 @@ async def test_obfs2_all(host, port, secret, session_str):
             pass
 
 
-async def test_faketls_all(host, port, secret, domain, session_str):
+async def test_faketls_all(host, port, secret, domain,
+                           bot_token="", session_str=""):
     """Run all fake-TLS tests with a single client connection."""
     try:
         from TelethonFakeTLS import ConnectionTcpMTProxyFakeTLS
@@ -278,11 +297,13 @@ async def test_faketls_all(host, port, secret, domain, session_str):
     )
 
     try:
-        me = await _connect_with_retry(client, "fake-tls")
+        me = await _connect_and_auth(client, "fake-tls",
+                                     bot_token=bot_token or None)
         if me is None:
+            print("[fake-tls] FAIL: get_me() returned None")
             return False, {}
 
-        print(f"[fake-tls] get_me OK: user_id={me.id}")
+        print(f"[fake-tls] get_me OK: id={me.id}")
 
         throughputs = await _download_test_files(client, "fake-tls")
         has_failure = any(v is None for v in throughputs.values())
@@ -298,9 +319,10 @@ async def test_faketls_all(host, port, secret, domain, session_str):
 
 
 def main():
+    bot_token = os.environ.get("TG_BOT_TOKEN", "")
     session_str = os.environ.get("TG_STRING_SESSION", "")
-    if not session_str:
-        print("ERROR: TG_STRING_SESSION not set")
+    if not bot_token and not session_str:
+        print("ERROR: TG_BOT_TOKEN or TG_STRING_SESSION required")
         sys.exit(1)
 
     secret = os.environ.get("TELEPROXY_SECRET", "")
@@ -313,17 +335,20 @@ def main():
     tls_port = int(os.environ.get("DIRECT_TLS_PORT", "9443"))
     domain = os.environ.get("EE_DOMAIN", "ya.ru")
 
-    print("=== Direct Mode E2E Tests ===\n")
+    mode = "bot" if bot_token else "user session"
+    print(f"=== Direct Mode E2E Tests ({mode}) ===\n")
 
     # Test 1: obfuscated2 (control — no DRS delays)
     obfs2_ok, obfs2_tp = asyncio.run(
-        test_obfs2_all(host, obfs2_port, secret, session_str)
+        test_obfs2_all(host, obfs2_port, secret,
+                       bot_token=bot_token, session_str=session_str)
     )
     print()
 
     # Test 2: fake-TLS (exercises DRS delays)
     tls_ok, tls_tp = asyncio.run(
-        test_faketls_all(host, tls_port, secret, domain, session_str)
+        test_faketls_all(host, tls_port, secret, domain,
+                         bot_token=bot_token, session_str=session_str)
     )
 
     # Compare throughputs: fake-TLS must not be dramatically slower than obfs2.

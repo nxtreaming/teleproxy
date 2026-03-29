@@ -221,7 +221,7 @@ jobs:
 
     - name: Run Direct Mode E2E Tests
       env:
-        TG_STRING_SESSION: ${{ secrets.TG_STRING_SESSION }}
+        TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
       run: |
         source .venv/bin/activate
         DIRECT_HOST=localhost \
