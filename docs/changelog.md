@@ -4,6 +4,15 @@ description: "Release history for Teleproxy. Version details, new features, bug 
 
 # Changelog
 
+## 4.12.0
+
+Bug fixes for Docker deployments and per-secret metrics.
+
+- **Fix `teleproxy_secret_unique_ips` always reporting 0** ([#70](https://github.com/teleproxy/teleproxy/issues/70)). The counter only ever incremented for secrets that had `max_ips` or `rate_limit` configured — a stale guard inside `ip_track_connect()` that broke the metric for every plain secret. Removed the guard so the IP-tracking table populates for all secrets. Also clarified the metric type: `teleproxy_secret_unique_ips` is `counter` (cumulative count of distinct source IPs since startup), not `gauge`.
+- **Clarified `teleproxy_secret_bytes_received_total` / `_sent_total` HELP text** ([#70](https://github.com/teleproxy/teleproxy/issues/70)). The labels are technically correct ("received from clients" = uploads, "sent to clients" = downloads) but easy to misread from a client perspective. The HELP lines now explicitly call out the direction. Note: these counters increment in direct mode only — relay-mode aggregation is a separate gap, tracked for a follow-up.
+- **Fix Docker `SECRET=hex:label,hex:label` writing the entire string as the TOML key** ([#67](https://github.com/teleproxy/teleproxy/issues/67)). The numbered-secret path (`SECRET_LABEL_N`) was already correct; the comma-separated path now mirrors it and writes a separate `label = ...` line.
+- **New `EXTERNAL_PORT` env var** ([#66](https://github.com/teleproxy/teleproxy/issues/66)) for advertising a different port in the connection link than the internal listen port — needed when Docker maps `-p 4443:443`. Also added a matching `external_port` TOML option, consumed by both the operator-printed connection URL and the `/link` HTML page (QR codes).
+
 ## 4.11.0
 
 SOCKS5 upstream support in the check command ([#57](https://github.com/teleproxy/teleproxy/issues/57)) and a new Cloudflare Spectrum deployment guide ([#55](https://github.com/teleproxy/teleproxy/issues/55)).

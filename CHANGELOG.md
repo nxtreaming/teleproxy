@@ -1,5 +1,26 @@
 # Changelog
 
+## [4.12.0]
+
+Bug fixes for Docker deployments and per-secret metrics.
+
+- Fix `teleproxy_secret_unique_ips` always reporting 0 (#70). The counter was
+  only incremented when a secret had `max_ips` or `rate_limit` configured;
+  plain secrets are now tracked too.
+- Clarify `teleproxy_secret_bytes_received_total` / `_sent_total` HELP text:
+  "received" is uploads (proxy from clients), "sent" is downloads (proxy to
+  clients). The counters are direct-mode only; relay-mode aggregation is a
+  separate gap, tracked for a follow-up.
+- Change `teleproxy_secret_unique_ips` TYPE from `gauge` to `counter` to
+  match its actual cumulative behaviour.
+- Fix Docker `SECRET=hex:label,hex:label` writing the entire string as the
+  TOML `key` instead of splitting label off (#67). The numbered-secret path
+  (`SECRET_LABEL_N`) was already correct.
+- Add `EXTERNAL_PORT` env var for advertising a different port in the
+  connection link than the internal listen port (#66) — needed when Docker
+  maps `-p 4443:443`. Also added a matching `external_port` TOML option,
+  consumed by the `/link` HTML page and `teleproxy link` URL builder.
+
 ## [4.11.0]
 
 SOCKS5 upstream support in check command (#57), Cloudflare Spectrum docs (#55).

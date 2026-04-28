@@ -37,6 +37,7 @@ struct toml_config {
   /* Network (not reloadable) */
   int port;                /* -H; 0 = not set */
   int stats_port;          /* -p; 0 = not set */
+  int external_port;       /* port advertised in /link URLs; 0 = use port */
   int workers;             /* -M; -1 = not set */
   int max_connections;     /* -C; 0 = not set */
   char bind[64];           /* --address; empty = not set */

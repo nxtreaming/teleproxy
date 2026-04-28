@@ -353,6 +353,7 @@ int toml_config_load (const char *path, struct toml_config *cfg,
   /* Network */
   cfg->port = get_optional_int (top, "port", 0);
   cfg->stats_port = get_optional_int (top, "stats_port", 0);
+  cfg->external_port = get_optional_int (top, "external_port", 0);
   cfg->workers = get_optional_int (top, "workers", -1);
   cfg->max_connections = get_optional_int (top, "max_connections", 0);
   get_optional_string (top, "bind", cfg->bind, sizeof (cfg->bind));

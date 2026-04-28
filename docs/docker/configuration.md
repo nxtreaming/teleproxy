@@ -15,7 +15,8 @@ description: "Complete reference for Teleproxy Docker environment variables: sec
 | `SECRET_QUOTA_1`...`SECRET_QUOTA_16` | — | Per-secret byte quota (e.g. `10737418240` for 10 GB) |
 | `SECRET_MAX_IPS_1`...`SECRET_MAX_IPS_16` | — | Per-secret unique IP limits |
 | `SECRET_EXPIRES_1`...`SECRET_EXPIRES_16` | — | Per-secret expiration (TOML datetime or Unix timestamp) |
-| `PORT` | 443 | Client connection port |
+| `PORT` | 443 | Client connection port (internal listen port) |
+| `EXTERNAL_PORT` | `$PORT` | Port advertised in connection links and `/link` QR codes. Set to the host-side port when Docker maps a different external port (e.g. `-p 4443:443` → `EXTERNAL_PORT=4443`) |
 | `STATS_PORT` | 8888 | Statistics endpoint port |
 | `WORKERS` | 1 | Worker processes |
 | `PROXY_TAG` | — | Tag from @MTProxybot (channel promotion) |

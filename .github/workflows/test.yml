@@ -120,6 +120,15 @@ jobs:
     - name: Run Junk Traffic Resilience Test
       run: make test-junk
 
+    - name: Run CSV Secret-Label Test
+      run: make test-csv-label
+
+    - name: Run External Port Test
+      run: make test-external-port
+
+    - name: Run Unique IPs Test
+      run: make test-unique-ips
+
     - name: Test install.sh config generation
       run: make test-install-config
 

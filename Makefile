@@ -79,7 +79,7 @@ DEPDIRS := ${DEP} $(addprefix ${DEP}/,${PROJECTS})
 ALLDIRS := ${DEPDIRS} ${OBJDIRS}
 
 
-.PHONY:	all clean lint tests test test-tls test-multi-secret test-secret-limit test-secret-quota test-rate-limit test-top-ips test-ip-acl test-drs-delays test-cdn-dc test-ipv6-direct test-dc-lookup test-config-reload test-secret-drain test-check test-link test-link-ip test-stats-port test-install-config test-proxy-protocol test-dc-probes test-junk docker-image-amd64 docker-run-help-amd64 docker-image-arm64 docker-run-help-arm64 fuzz fuzz-run
+.PHONY:	all clean lint tests test test-tls test-multi-secret test-secret-limit test-secret-quota test-rate-limit test-top-ips test-ip-acl test-drs-delays test-cdn-dc test-ipv6-direct test-dc-lookup test-config-reload test-secret-drain test-check test-link test-link-ip test-stats-port test-install-config test-proxy-protocol test-dc-probes test-junk test-csv-label test-external-port test-unique-ips docker-image-amd64 docker-run-help-amd64 docker-image-arm64 docker-run-help-arm64 fuzz fuzz-run
 
 EXELIST	:= ${EXE}/teleproxy
 
@@ -433,6 +433,43 @@ test-junk:
 		docker compose -f tests/docker-compose.junk-test.yml logs teleproxy; \
 		docker compose -f tests/docker-compose.junk-test.yml down; exit 1)
 	docker compose -f tests/docker-compose.junk-test.yml down
+
+test-csv-label:
+	@export TELEPROXY_SECRET_1=$$(head -c 16 /dev/urandom | xxd -ps) && \
+	export TELEPROXY_SECRET_2=$$(head -c 16 /dev/urandom | xxd -ps) && \
+	echo "Using secrets: $$TELEPROXY_SECRET_1, $$TELEPROXY_SECRET_2" && \
+	timeout 120s docker compose -f tests/docker-compose.csv-label-test.yml up --build --exit-code-from tester || \
+		(echo "CSV secret-label test failed"; \
+		docker compose -f tests/docker-compose.csv-label-test.yml logs teleproxy; \
+		docker compose -f tests/docker-compose.csv-label-test.yml down; exit 1)
+	docker compose -f tests/docker-compose.csv-label-test.yml down
+
+test-external-port:
+	@export TELEPROXY_SECRET=$$(head -c 16 /dev/urandom | xxd -ps) && \
+	echo "Using secret: $$TELEPROXY_SECRET" && \
+	timeout 120s docker compose -f tests/docker-compose.external-port-test.yml up --build --exit-code-from tester || \
+		(echo "External port test failed"; \
+		docker compose -f tests/docker-compose.external-port-test.yml logs teleproxy; \
+		docker compose -f tests/docker-compose.external-port-test.yml down; exit 1)
+	@docker compose -f tests/docker-compose.external-port-test.yml logs teleproxy 2>&1 | grep -q 'port=4443' || \
+		(echo "FAIL: 'port=4443' not found in teleproxy stdout"; \
+		docker compose -f tests/docker-compose.external-port-test.yml down; exit 1)
+	docker compose -f tests/docker-compose.external-port-test.yml down
+
+test-unique-ips:
+	@export TELEPROXY_SECRET=$$(head -c 16 /dev/urandom | xxd -ps) && \
+	echo "Using secret: $$TELEPROXY_SECRET" && \
+	export COMPOSE_FILE=tests/docker-compose.unique-ips-test.yml && \
+	docker compose build tester teleproxy tls-backend && \
+	docker compose up -d tls-backend teleproxy && \
+	(docker compose run --rm handshaker-a && \
+	 docker compose run --rm handshaker-b && \
+	 docker compose run --rm handshaker-c && \
+	 docker compose run --rm tester) || \
+		(echo "Unique IPs test failed"; \
+		docker compose logs teleproxy; \
+		docker compose down -v; exit 1)
+	docker compose down -v
 
 test-stats-port:
 	@export TELEPROXY_SECRET=$$(head -c 16 /dev/urandom | xxd -ps) && \

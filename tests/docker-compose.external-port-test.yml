@@ -1,0 +1,33 @@
+services:
+  teleproxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBUG_TOOLS: "1"
+    environment:
+      - SECRET=${TELEPROXY_SECRET}
+      # Internal listen port differs from advertised external port.
+      - PORT=8443
+      - EXTERNAL_PORT=4443
+      - STATS_PORT=8888
+      - DIRECT_MODE=true
+      - WORKERS=0
+    networks:
+      - tlsnet
+
+  tester:
+    build: .
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_STATS_PORT=8888
+      - EXPECTED_PORT=4443
+    networks:
+      - tlsnet
+    depends_on:
+      - teleproxy
+    command: ["python", "test_external_port.py"]
+
+networks:
+  tlsnet:
+    driver: bridge

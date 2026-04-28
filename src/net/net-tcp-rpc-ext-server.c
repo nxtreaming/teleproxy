@@ -328,10 +328,10 @@ static int ip_over_limit (int secret_id, unsigned ip, const unsigned char *ipv6)
   return per_secret_unique_ip_count[secret_id] >= eff;
 }
 
-/* Track a new connection from an IP.  Must be called AFTER all checks pass. */
+/* Track a new connection from an IP.  Must be called AFTER all checks pass.
+   Always populates the table regardless of max_ips/rate_limit so that
+   per_secret_unique_ips reflects every secret, not only limit-bearing ones. */
 static void ip_track_connect (int secret_id, unsigned ip, const unsigned char *ipv6) {
-  if (ext_secret_max_ips[secret_id] <= 0 && ext_secret_rate_limit[secret_id] <= 0) { return; }
-
   static const unsigned char zero_ipv6[16] = {};
 
   /* Find existing entry for this IP */
@@ -372,8 +372,6 @@ static void ip_track_connect (int secret_id, unsigned ip, const unsigned char *i
 }
 
 void ip_track_disconnect_impl (int secret_id, unsigned ip, const unsigned char *ipv6) {
-  if (ext_secret_max_ips[secret_id] <= 0 && ext_secret_rate_limit[secret_id] <= 0) { return; }
-
   static const unsigned char zero_ipv6[16] = {};
 
   for (int i = 0; i < SECRET_MAX_TRACKED_IPS; i++) {

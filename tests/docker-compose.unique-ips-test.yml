@@ -1,0 +1,84 @@
+services:
+  teleproxy:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBUG_TOOLS: "1"
+    environment:
+      # Plain secret — no rate_limit, no max_ips. The bug's regression case.
+      - SECRET_1=${TELEPROXY_SECRET}
+      - SECRET_LABEL_1=plain
+      - PORT=8443
+      - STATS_PORT=8888
+      - DIRECT_MODE=true
+      - RANDOM_PADDING=true
+      - WORKERS=0
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.0.20
+
+  # All handshakers and the verifier share the same tester image. The
+  # `build:` directive is repeated so each service can be built independently
+  # in cold-cache CI environments while still tagging the same image.
+  # The tester service builds the shared image. Handshakers reuse it
+  # (no build directive — built once and reused via `image:`).
+  handshaker-a:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.0.31
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-b:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.0.32
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-c:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.0.33
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  tester:
+    image: tests-tester:latest
+    build: .
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_STATS_PORT=8888
+      - EXPECTED_MIN_UNIQUE_IPS=3
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.0.40
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips.py"]
+
+networks:
+  tlsnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/24

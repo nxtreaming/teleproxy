@@ -875,14 +875,14 @@ void mtfront_prepare_prometheus_stats (stats_buffer_t *sb) {
 	         tcp_rpcs_get_ext_secret_label (_i), S(per_secret_connections_rejected[_i]));
       }
       sb_printf (sb,
-	       "# HELP teleproxy_secret_bytes_received_total Bytes received from clients per secret.\n"
+	       "# HELP teleproxy_secret_bytes_received_total Bytes received by proxy from clients (i.e. client uploads) per secret. Direct mode only.\n"
 	       "# TYPE teleproxy_secret_bytes_received_total counter\n");
       for (_i = 0; _i < _sc; _i++) { if (tcp_rpcs_get_ext_secret_state (_i) == SLOT_FREE) { continue; }
         sb_printf (sb, "teleproxy_secret_bytes_received_total{secret=\"%s\"} %lld\n",
 	         tcp_rpcs_get_ext_secret_label (_i), S(per_secret_bytes_received[_i]));
       }
       sb_printf (sb,
-	       "# HELP teleproxy_secret_bytes_sent_total Bytes sent to clients per secret.\n"
+	       "# HELP teleproxy_secret_bytes_sent_total Bytes sent by proxy to clients (i.e. client downloads) per secret. Direct mode only.\n"
 	       "# TYPE teleproxy_secret_bytes_sent_total counter\n");
       for (_i = 0; _i < _sc; _i++) { if (tcp_rpcs_get_ext_secret_state (_i) == SLOT_FREE) { continue; }
         sb_printf (sb, "teleproxy_secret_bytes_sent_total{secret=\"%s\"} %lld\n",
@@ -910,8 +910,8 @@ void mtfront_prepare_prometheus_stats (stats_buffer_t *sb) {
 	         tcp_rpcs_get_ext_secret_label (_i), tcp_rpcs_get_ext_secret_max_ips (_i));
       }
       sb_printf (sb,
-	       "# HELP teleproxy_secret_unique_ips Current unique IPs connected per secret.\n"
-	       "# TYPE teleproxy_secret_unique_ips gauge\n");
+	       "# HELP teleproxy_secret_unique_ips Cumulative count of distinct source IPs observed per secret since startup (resets on secret drain).\n"
+	       "# TYPE teleproxy_secret_unique_ips counter\n");
       for (_i = 0; _i < _sc; _i++) { if (tcp_rpcs_get_ext_secret_state (_i) == SLOT_FREE) { continue; }
         sb_printf (sb, "teleproxy_secret_unique_ips{secret=\"%s\"} %lld\n",
 	         tcp_rpcs_get_ext_secret_label (_i), S(per_secret_unique_ips[_i]));
@@ -1149,7 +1149,7 @@ void mtfront_prepare_link_page (stats_buffer_t *sb,
     }
   }
 
-  int port = http_port[0];
+  int port = (toml_cfg.external_port > 0) ? toml_cfg.external_port : http_port[0];
 
   sb_printf (sb,
     "<!DOCTYPE html><html><head>"
