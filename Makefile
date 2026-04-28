@@ -460,8 +460,8 @@ test-unique-ips:
 	@export TELEPROXY_SECRET=$$(head -c 16 /dev/urandom | xxd -ps) && \
 	echo "Using secret: $$TELEPROXY_SECRET" && \
 	export COMPOSE_FILE=tests/docker-compose.unique-ips-test.yml && \
-	docker compose build tester teleproxy tls-backend && \
-	docker compose up -d tls-backend teleproxy && \
+	docker compose build tester teleproxy && \
+	docker compose up -d teleproxy && \
 	(docker compose run --rm handshaker-a && \
 	 docker compose run --rm handshaker-b && \
 	 docker compose run --rm handshaker-c && \
