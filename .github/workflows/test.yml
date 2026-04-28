@@ -314,7 +314,13 @@ jobs:
         cp objs/bin/teleproxy teleproxy-run/
         cd teleproxy-run
 
-        SECRET=$(head -c 16 /dev/urandom | xxd -ps)
+        # Reroll if the secret starts with ee/dd: Telethon's normalize_secret
+        # strips those bytes as fake-TLS / random-padding markers, leaving
+        # only 15 bytes which fails the 16-byte length check.
+        while :; do
+          SECRET=$(head -c 16 /dev/urandom | xxd -ps)
+          case $SECRET in ee*|dd*) ;; *) break;; esac
+        done
         echo "Using secret: $SECRET"
         echo "TELEPROXY_SECRET=$SECRET" >> $GITHUB_ENV
 
