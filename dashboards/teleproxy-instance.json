@@ -16,7 +16,7 @@
     ]
   },
   "description": "Per-instance view. Connections, per-secret usage, rejection rates, DC connectivity, and resource utilization for Teleproxy MTProxy, filtered by the $instance Prometheus label.",
-  "editable": true,
+  "editable": false,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
   "id": null,
@@ -2944,7 +2944,7 @@
           "query": "label_values(teleproxy_active_connections,instance)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
-        "refresh": 1,
+        "refresh": 2,
         "regex": "",
         "type": "query"
       }
