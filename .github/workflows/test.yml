@@ -129,6 +129,9 @@ jobs:
     - name: Run Unique IPs Test
       run: make test-unique-ips
 
+    - name: Run Table-Full Throttle Test
+      run: make test-table-full
+
     - name: Test install.sh config generation
       run: make test-install-config
 

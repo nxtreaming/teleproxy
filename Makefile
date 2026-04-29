@@ -79,13 +79,13 @@ DEPDIRS := ${DEP} $(addprefix ${DEP}/,${PROJECTS})
 ALLDIRS := ${DEPDIRS} ${OBJDIRS}
 
 
-.PHONY:	all clean lint tests test test-tls test-multi-secret test-secret-limit test-secret-quota test-rate-limit test-top-ips test-ip-acl test-drs-delays test-cdn-dc test-ipv6-direct test-dc-lookup test-config-reload test-secret-drain test-check test-link test-link-ip test-stats-port test-install-config test-proxy-protocol test-dc-probes test-junk test-csv-label test-external-port test-unique-ips docker-image-amd64 docker-run-help-amd64 docker-image-arm64 docker-run-help-arm64 fuzz fuzz-run
+.PHONY:	all clean lint tests test test-tls test-multi-secret test-secret-limit test-secret-quota test-rate-limit test-top-ips test-ip-acl test-drs-delays test-cdn-dc test-ipv6-direct test-dc-lookup test-config-reload test-secret-drain test-check test-link test-link-ip test-stats-port test-install-config test-proxy-protocol test-dc-probes test-junk test-csv-label test-external-port test-unique-ips test-table-full docker-image-amd64 docker-run-help-amd64 docker-image-arm64 docker-run-help-arm64 fuzz fuzz-run
 
 EXELIST	:= ${EXE}/teleproxy
 
 
 OBJECTS	=	\
-  ${OBJ}/src/mtproto/mtproto-proxy.o ${OBJ}/src/mtproto/mtproto-proxy-stats.o ${OBJ}/src/mtproto/mtproto-proxy-http.o ${OBJ}/src/mtproto/mtproto-config.o ${OBJ}/src/mtproto/mtproto-dc-table.o ${OBJ}/src/mtproto/mtproto-dc-probes.o ${OBJ}/src/mtproto/mtproto-check.o ${OBJ}/src/mtproto/mtproto-link.o ${OBJ}/src/net/net-tcp-rpc-ext-server.o ${OBJ}/src/net/net-tcp-rpc-ext-drain.o ${OBJ}/src/net/net-tcp-rpc-ext-top-ips.o ${OBJ}/src/net/net-tcp-direct-dc.o
+  ${OBJ}/src/mtproto/mtproto-proxy.o ${OBJ}/src/mtproto/mtproto-proxy-stats.o ${OBJ}/src/mtproto/mtproto-proxy-http.o ${OBJ}/src/mtproto/mtproto-config.o ${OBJ}/src/mtproto/mtproto-dc-table.o ${OBJ}/src/mtproto/mtproto-dc-probes.o ${OBJ}/src/mtproto/mtproto-check.o ${OBJ}/src/mtproto/mtproto-link.o ${OBJ}/src/net/net-tcp-rpc-ext-server.o ${OBJ}/src/net/net-tcp-rpc-ext-drain.o ${OBJ}/src/net/net-tcp-rpc-ext-top-ips.o ${OBJ}/src/net/net-tcp-rpc-ext-uniq-bloom.o ${OBJ}/src/net/net-tcp-direct-dc.o
 
 DEPENDENCE_CXX		:=	$(subst ${OBJ}/,${DEP}/,$(patsubst %.o,%.d,${OBJECTS_CXX}))
 DEPENDENCE_STRANGE	:=	$(subst ${OBJ}/,${DEP}/,$(patsubst %.o,%.d,${OBJECTS_STRANGE}))
@@ -145,7 +145,7 @@ ${LIB_OBJS_NORMAL}: ${OBJ}/%.o: %.c | create_dirs_and_headers
 
 ${EXELIST}: ${LIBLIST}
 
-${EXE}/teleproxy:	${OBJ}/src/mtproto/mtproto-proxy.o ${OBJ}/src/mtproto/mtproto-proxy-stats.o ${OBJ}/src/mtproto/mtproto-proxy-http.o ${OBJ}/src/mtproto/mtproto-config.o ${OBJ}/src/mtproto/mtproto-dc-table.o ${OBJ}/src/mtproto/mtproto-dc-probes.o ${OBJ}/src/mtproto/mtproto-check.o ${OBJ}/src/mtproto/mtproto-link.o ${OBJ}/src/net/net-tcp-rpc-ext-server.o ${OBJ}/src/net/net-tcp-rpc-ext-drain.o ${OBJ}/src/net/net-tcp-rpc-ext-top-ips.o ${OBJ}/src/net/net-tcp-direct-dc.o
+${EXE}/teleproxy:	${OBJ}/src/mtproto/mtproto-proxy.o ${OBJ}/src/mtproto/mtproto-proxy-stats.o ${OBJ}/src/mtproto/mtproto-proxy-http.o ${OBJ}/src/mtproto/mtproto-config.o ${OBJ}/src/mtproto/mtproto-dc-table.o ${OBJ}/src/mtproto/mtproto-dc-probes.o ${OBJ}/src/mtproto/mtproto-check.o ${OBJ}/src/mtproto/mtproto-link.o ${OBJ}/src/net/net-tcp-rpc-ext-server.o ${OBJ}/src/net/net-tcp-rpc-ext-drain.o ${OBJ}/src/net/net-tcp-rpc-ext-top-ips.o ${OBJ}/src/net/net-tcp-rpc-ext-uniq-bloom.o ${OBJ}/src/net/net-tcp-direct-dc.o
 	${CC} -o $@ $^ ${LDFLAGS}
 
 ${LIB}/libkdb.a: ${LIB_OBJS}
@@ -469,6 +469,28 @@ test-unique-ips:
 		(echo "Unique IPs test failed"; \
 		docker compose logs teleproxy; \
 		docker compose down -v; exit 1)
+	docker compose down -v
+
+test-table-full:
+	@export TELEPROXY_SECRET=$$(head -c 16 /dev/urandom | xxd -ps) && \
+	echo "Using secret: $$TELEPROXY_SECRET" && \
+	export COMPOSE_FILE=tests/docker-compose.table-full-test.yml && \
+	docker compose build tester teleproxy && \
+	docker compose up -d teleproxy && \
+	(docker compose up -d handshaker-a handshaker-b handshaker-c handshaker-d handshaker-e handshaker-f && \
+	 docker compose wait handshaker-a handshaker-b handshaker-c handshaker-d handshaker-e handshaker-f && \
+	 docker compose run --rm tester) || \
+		(echo "Table-full regression test failed"; \
+		docker compose logs teleproxy; \
+		docker compose logs handshaker-a handshaker-b handshaker-c handshaker-d handshaker-e handshaker-f; \
+		docker compose down -v; exit 1) && \
+	warnings=$$(docker compose logs teleproxy 2>&1 | grep -c 'IP tracking table full' || true) && \
+	echo "Saw $$warnings table-full warnings (expected <= 1, throttle window 60s)" && \
+	if [ "$$warnings" -gt 1 ]; then \
+		echo "FAIL: warning not throttled — got $$warnings, expected <= 1"; \
+		docker compose logs teleproxy; \
+		docker compose down -v; exit 1; \
+	fi && \
 	docker compose down -v
 
 test-stats-port:

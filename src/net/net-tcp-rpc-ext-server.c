@@ -50,6 +50,7 @@
 #include "net/net-tcp-connections.h"
 #include "net/net-tcp-drs.h"
 #include "net/net-tcp-rpc-ext-server.h"
+#include "net/net-tcp-rpc-ext-uniq-bloom.h"
 #include "net/net-tcp-direct-dc.h"
 #include "net/net-obfs2-parse.h"
 #include "net/net-proxy-protocol.h"
@@ -204,8 +205,12 @@ int ext_secret_state[EXT_SECRET_MAX_SLOTS];          /* SLOT_FREE / SLOT_ACTIVE 
 double ext_secret_drain_started_at[EXT_SECRET_MAX_SLOTS]; /* precise_now snapshot */
 static int ext_rand_pad_only = 0;
 
-/* Per-secret IP tracking for unique-IP limits */
+/* Per-secret IP tracking for unique-IP limits.  Cumulative unique-IP
+   counting lives in net-tcp-rpc-ext-uniq-bloom.c (Bloom, issue #71);
+   per-IP top-N volume tracking in net-tcp-rpc-ext-top-ips.c (issue #46). */
+#ifndef SECRET_MAX_TRACKED_IPS
 #define SECRET_MAX_TRACKED_IPS 256
+#endif
 
 struct tracked_ip {
   unsigned ip;              /* IPv4 (host byte order), 0 = empty */
@@ -217,10 +222,6 @@ struct tracked_ip {
 
 static struct tracked_ip per_secret_ips[EXT_SECRET_MAX_SLOTS][SECRET_MAX_TRACKED_IPS];
 static int per_secret_unique_ip_count[EXT_SECRET_MAX_SLOTS];
-
-/* Per-IP volume tracking for top-N metrics lives in net-tcp-rpc-ext-top-ips.c
-   (issue #46).  Kept separate to preserve responsibility boundaries and to
-   stay under the per-file LLM-context line budget. */
 
 void tcp_rpcs_set_ext_secret (unsigned char secret[16], const char *label,
                               int limit, long long quota, long long rate_limit,
@@ -241,6 +242,7 @@ void tcp_rpcs_set_ext_secret (unsigned char secret[16], const char *label,
   ext_secret_state[idx] = SLOT_ACTIVE;
   ext_secret_drain_started_at[idx] = 0;
   memset (per_secret_ips[idx], 0, sizeof (per_secret_ips[idx]));
+  uniq_bloom_clear_slot (idx);
   per_secret_unique_ip_count[idx] = 0;
 
   vkprintf (0, "Added secret #%d label=[%s] limit=%d quota=%lld rate_limit=%lld max_ips=%d expires=%lld\n",
@@ -328,10 +330,17 @@ static int ip_over_limit (int secret_id, unsigned ip, const unsigned char *ipv6)
   return per_secret_unique_ip_count[secret_id] >= eff;
 }
 
-/* Track a new connection from an IP.  Must be called AFTER all checks pass.
-   Always populates the table regardless of max_ips/rate_limit so that
-   per_secret_unique_ips reflects every secret, not only limit-bearing ones. */
+/* The Bloom filter feeds cumulative per_secret_unique_ips for every secret;
+   the precise table only loads for limit-bearing secrets (issue #71). */
 static void ip_track_connect (int secret_id, unsigned ip, const unsigned char *ipv6) {
+  if (uniq_bloom_test_and_set (secret_id, ip, ipv6)) {
+    per_secret_unique_ips[secret_id]++;
+  }
+
+  if (ext_secret_max_ips[secret_id] <= 0 && ext_secret_rate_limit[secret_id] <= 0) {
+    return;
+  }
+
   static const unsigned char zero_ipv6[16] = {};
 
   /* Find existing entry for this IP */
@@ -353,22 +362,26 @@ static void ip_track_connect (int secret_id, unsigned ip, const unsigned char *i
       e->ip = ip;
       if (ipv6) { memcpy (e->ipv6, ipv6, 16); } else { memset (e->ipv6, 0, 16); }
       e->connections = 1;
-      /* Initialize rate limit token bucket */
       long long rl = ext_secret_rate_limit[secret_id];
       if (rl > 0) {
         long long eff = workers > 1 ? rl / workers : rl;
         if (eff < 1) { eff = 1; }
-        e->tokens = eff;  /* start with 1s burst */
+        e->tokens = eff;
         e->last_refill_time = precise_now;
       }
       per_secret_unique_ip_count[secret_id]++;
-      per_secret_unique_ips[secret_id]++;
       return;
     }
   }
 
-  /* Table full — shouldn't happen if ip_over_limit was checked first */
-  vkprintf (0, "WARNING: IP tracking table full for secret %d\n", secret_id);
+  /* Table full — operator likely set max_ips above SECRET_MAX_TRACKED_IPS.
+     Throttle so a misconfigured secret can't flood the log. */
+  static double last_warn_at[EXT_SECRET_MAX_SLOTS];
+  if (precise_now - last_warn_at[secret_id] >= 60.0) {
+    last_warn_at[secret_id] = precise_now;
+    vkprintf (0, "WARNING: IP tracking table full for secret %d (%s) — raise max_ips or check for misconfiguration\n",
+              secret_id, ext_secret_label[secret_id]);
+  }
 }
 
 void ip_track_disconnect_impl (int secret_id, unsigned ip, const unsigned char *ipv6) {
@@ -406,6 +419,7 @@ void tcp_rpcs_ip_track_disconnect (int secret_id, unsigned ip, const unsigned ch
 void tcp_rpcs_ip_track_clear_slot (int secret_id) {
   if (secret_id < 0 || secret_id >= EXT_SECRET_MAX_SLOTS) { return; }
   memset (per_secret_ips[secret_id], 0, sizeof (per_secret_ips[secret_id]));
+  uniq_bloom_clear_slot (secret_id);
   per_secret_unique_ip_count[secret_id] = 0;
 }
 

@@ -4,6 +4,14 @@ description: "Release history for Teleproxy. Version details, new features, bug 
 
 # Changelog
 
+## 4.12.1
+
+Hotfix for log spam introduced by the 4.12.0 unique-IPs counter rework.
+
+- **Fix `WARNING: IP tracking table full for secret 0` flooding docker logs** ([#71](https://github.com/teleproxy/teleproxy/issues/71)). The 4.12.0 fix for [#70](https://github.com/teleproxy/teleproxy/issues/70) made every secret populate a fixed-size 256-entry per-IP table; on a busy public proxy with no `max_ips` or `rate_limit` configured, the table fills as soon as ~256 distinct source IPs have connected and every subsequent unique client logs a warning. Plain secrets now bypass the precise table entirely and feed `teleproxy_secret_unique_ips` from a per-secret Bloom filter — bounded memory, no overflow, ~0.5% FPR at 10K IPs.
+- **Throttle the table-full warning** to once per minute per slot for limit-bearing secrets where `max_ips` legitimately exceeds the table size. The message now also includes the secret label and a hint to raise `max_ips` or check the configuration.
+- The macro `SECRET_MAX_TRACKED_IPS` is now overridable at build time (`make EXTRA_CFLAGS="-DSECRET_MAX_TRACKED_IPS=N"`), used by the new `make test-table-full` regression test.
+
 ## 4.12.0
 
 Bug fixes for Docker deployments and per-secret metrics.

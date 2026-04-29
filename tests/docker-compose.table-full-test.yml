@@ -1,0 +1,124 @@
+services:
+  teleproxy:
+    build:
+      context: ..
+      dockerfile: tests/Dockerfile.tracked-ips-cap
+      args:
+        TRACKED_IPS_CAP: "4"
+    environment:
+      # max_ips=10 keeps ip_over_limit from rejecting any of the 6 source IPs;
+      # combined with TRACKED_IPS_CAP=4 it forces ip_track_connect's
+      # precise-table population loop to overflow on the 5th unique IP,
+      # exercising the throttled-warning code path (issue #71). The Bloom
+      # filter sees all 6 IPs, so the cumulative unique_ips counter must
+      # reach 6 even though the precise table holds at most 4.
+      - SECRET_1=${TELEPROXY_SECRET}
+      - SECRET_LABEL_1=limited
+      - SECRET_MAX_IPS_1=10
+      - PORT=8443
+      - STATS_PORT=8888
+      - DIRECT_MODE=true
+      - RANDOM_PADDING=true
+      - WORKERS=0
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.20
+
+  handshaker-a:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.31
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-b:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.32
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-c:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.33
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-d:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.34
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-e:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.35
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  handshaker-f:
+    image: tests-tester:latest
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_PORT=8443
+      - TELEPROXY_SECRET=${TELEPROXY_SECRET}
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.36
+    depends_on:
+      - teleproxy
+    command: ["python", "test_unique_ips_handshake.py"]
+
+  tester:
+    image: tests-tester:latest
+    build: .
+    environment:
+      - TELEPROXY_HOST=teleproxy
+      - TELEPROXY_STATS_PORT=8888
+      - EXPECTED_MIN_UNIQUE_IPS=6
+    networks:
+      tlsnet:
+        ipv4_address: 172.31.1.40
+    depends_on:
+      - teleproxy
+    command: ["python", "test_table_full_warning.py"]
+
+networks:
+  tlsnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.1.0/24

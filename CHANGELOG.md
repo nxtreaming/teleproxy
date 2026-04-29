@@ -1,5 +1,20 @@
 # Changelog
 
+## [4.12.1]
+
+Hotfix for log spam introduced in 4.12.0.
+
+- Fix `WARNING: IP tracking table full for secret 0` flooding docker logs
+  on busy plain secrets (#71). The 4.12.0 fix for #70 made every secret
+  populate a fixed-size 256-entry per-IP table, which overflows on any
+  proxy serving more than ~256 distinct source IPs since startup. Plain
+  secrets (no `max_ips`, no `rate_limit`) now bypass the precise tracking
+  table entirely and feed the cumulative `teleproxy_secret_unique_ips`
+  counter from a per-secret Bloom filter — bounded memory, no overflow.
+- For limit-bearing secrets where the table can still legitimately fill
+  if `max_ips` exceeds 256, throttle the warning to once per minute per
+  slot and include the secret label and a remediation hint.
+
 ## [4.12.0]
 
 Bug fixes for Docker deployments and per-secret metrics.
