@@ -39,6 +39,20 @@ jobs:
     - name: Build with -Werror (ARM64 native)
       run: make clean && make -j$(nproc) EXTRA_CFLAGS="-Werror"
 
+  # x86_64 clang build: exercises the __builtin_ia32_* alias macros in
+  # src/common/crc32.c (#68) so future regressions in the clang path
+  # surface in CI rather than only in third-party packaging.
+  build-clang:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang libssl-dev zlib1g-dev
+    - name: Build with clang
+      run: make clean && make -j$(nproc) CC=clang
+
   test:
     runs-on: ubuntu-latest
     steps:
