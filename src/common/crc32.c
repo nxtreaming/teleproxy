@@ -31,7 +31,7 @@
 #include "common/cpuid.h"
 #include "common/kprintf.h"
 
-#ifdef __clang__
+#if defined(__clang__) && (defined(__x86_64__) || defined(__i386__))
 #include <immintrin.h>
 #include <wmmintrin.h>
 
