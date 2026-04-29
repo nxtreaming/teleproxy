@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.12.2]
+
+Build hygiene. No runtime changes.
+
+- Compile cleanly with `make CC=clang` on x86_64 (#68). Adds `_mm_*`
+  intrinsic shims for the GCC-only `__builtin_ia32_*` names used in
+  `src/common/crc32.c`, gated to x86 so Apple Silicon clang isn't
+  affected.
+- New `build-clang` job in the CI matrix exercises the clang x86_64
+  build path so future regressions surface in CI rather than only in
+  third-party packaging (#72).
+
 ## [4.12.1]
 
 Hotfix for log spam introduced in 4.12.0.

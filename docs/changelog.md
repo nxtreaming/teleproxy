@@ -4,6 +4,13 @@ description: "Release history for Teleproxy. Version details, new features, bug 
 
 # Changelog
 
+## 4.12.2
+
+Build hygiene release. No runtime changes.
+
+- **Clang x86_64 build support** ([#68](https://github.com/teleproxy/teleproxy/pull/68)). `make CC=clang` now compiles cleanly on Linux x86_64 — `src/common/crc32.c` previously relied on GCC-only `__builtin_ia32_*` names for SSE/PCLMUL ops; clang gets `_mm_*` intrinsic shims for the missing ones. The shim block is gated to `__x86_64__`/`__i386__` so Apple Silicon clang isn't affected.
+- **Clang x86_64 CI job** ([#72](https://github.com/teleproxy/teleproxy/issues/72)). New `build-clang` job in the test matrix runs `make CC=clang` so future regressions in the clang build path surface in CI instead of in third-party packaging.
+
 ## 4.12.1
 
 Hotfix for log spam introduced by the 4.12.0 unique-IPs counter rework.
