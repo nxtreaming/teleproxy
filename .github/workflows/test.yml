@@ -304,6 +304,11 @@ jobs:
     runs-on: ubuntu-latest
     # Only run when secrets are available (skip on fork PRs)
     if: ${{ github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository }}
+    # Serialize across every ref. TG_TEST_SESSION is one auth key — two
+    # runners using it from different IPs at once revoke it (AuthKeyDuplicatedError).
+    concurrency:
+      group: tg-test-session
+      cancel-in-progress: false
     steps:
     - uses: actions/checkout@v4
       with:
