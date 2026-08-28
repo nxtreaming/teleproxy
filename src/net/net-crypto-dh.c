@@ -19,10 +19,6 @@
               2014 Andrey Lopatin
     
 */
-#define	_FILE_OFFSET_BITS	64
-#define _XOPEN_SOURCE 500
-
-
 #include <assert.h>
 #include <errno.h>
 #include <pthread.h>
